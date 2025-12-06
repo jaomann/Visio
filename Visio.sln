@@ -1,0 +1,27 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35828.75 d17.13
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Visio", "Visio.csproj", "{DD282B6C-A1B7-471C-9241-32E2E0408060}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{DD282B6C-A1B7-471C-9241-32E2E0408060}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DD282B6C-A1B7-471C-9241-32E2E0408060}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DD282B6C-A1B7-471C-9241-32E2E0408060}.Debug|Any CPU.Deploy.0 = Debug|Any CPU
+		{DD282B6C-A1B7-471C-9241-32E2E0408060}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DD282B6C-A1B7-471C-9241-32E2E0408060}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DD282B6C-A1B7-471C-9241-32E2E0408060}.Release|Any CPU.Deploy.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {8FFA45FF-D309-47AB-BB0F-D12AE0449412}
+	EndGlobalSection
+EndGlobal
