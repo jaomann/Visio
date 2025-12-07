@@ -24,67 +24,55 @@ public class VlcRtspStreamService : IRtspStreamService
     /// </summary>
     public async Task<bool> ConnectAsync(string rtspUrl)
     {
-        if (string.IsNullOrWhiteSpace(rtspUrl))
-            throw new ArgumentException("URL não pode ser vazia", nameof(rtspUrl));
+        Debug.WriteLine($"[RTSP] Tentando conectar: {rtspUrl}");
 
-        if (!rtspUrl.StartsWith("rtsp://", StringComparison.OrdinalIgnoreCase))
-            throw new ArgumentException("URL deve começar com rtsp://", nameof(rtspUrl));
-
-        try
+        if (_libVLC == null)
         {
-            Debug.WriteLine($"[RTSP] Tentando conectar: {rtspUrl}");
-
-            if (_libVLC == null)
-            {
-                var options = new[]
-                {
-                    "--network-caching=300",
-                    "--rtsp-tcp",
-                    "--no-audio",
-                    "--verbose=0"
-                };
-
-                _libVLC = new LibVLC(options);
-                Debug.WriteLine("[RTSP] LibVLC inicializado");
-            }
-
-            var media = new Media(_libVLC, rtspUrl, FromType.FromLocation);
-
-            if (_mediaPlayer == null)
-            {
-                _mediaPlayer = new MediaPlayer(_libVLC);
-
-                _mediaPlayer.Playing += (s, e) =>
-                    Debug.WriteLine("[RTSP] Reproduzindo");
-
-                _mediaPlayer.EncounteredError += (s, e) =>
-                {
-                    Debug.WriteLine("[RTSP] Erro encontrado");
-                    _isConnected = false;
-                    ConnectionError?.Invoke(this, "Erro na reprodução do stream");
-                };
-            }
-
-            _mediaPlayer.Media = media;
-            _mediaPlayer.Play();
-
-            await Task.Delay(2000);
-
-            _isConnected = _mediaPlayer.IsPlaying;
-
-            if (_isConnected)
-                Debug.WriteLine("[RTSP] Conectado com sucesso");
-            else
-                Debug.WriteLine("[RTSP] Não está reproduzindo");
-
-            return _isConnected;
+            _libVLC = new LibVLC(
+                "--rtsp-tcp",
+                "--network-caching=1000",
+                "--verbose=2"
+            );
         }
-        catch (Exception ex)
+
+        var media = new Media(_libVLC, new Uri(rtspUrl));
+        media.AddOption(":rtsp-tcp");
+        media.AddOption(":network-caching=1000");
+
+        if (_mediaPlayer == null)
         {
-            Debug.WriteLine($"[RTSP] ✗ Exceção: {ex.Message}");
-            _isConnected = false;
-            throw new Exception($"Falha ao conectar: {ex.Message}", ex);
+            _mediaPlayer = new MediaPlayer(_libVLC);
+
+            _mediaPlayer.Playing += (_, _) =>
+            {
+                Debug.WriteLine("[RTSP] Playing");
+                _isConnected = true;
+            };
+
+            _mediaPlayer.EncounteredError += (_, _) =>
+            {
+                Debug.WriteLine("[RTSP] Error");
+                _isConnected = false;
+            };
         }
+
+        _mediaPlayer.Media = media;
+        _mediaPlayer.Play();
+
+        var timeout = DateTime.Now.AddSeconds(10);
+        while (DateTime.Now < timeout)
+        {
+            if (_mediaPlayer.State == VLCState.Playing)
+                return true;
+
+            if (_mediaPlayer.State == VLCState.Error)
+                return false;
+
+            await Task.Delay(300);
+        }
+
+        Debug.WriteLine("[RTSP] Timeout");
+        return false;
     }
 
     /// <summary>
