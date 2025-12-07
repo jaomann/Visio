@@ -1,7 +1,5 @@
 ﻿using Microsoft.UI.Xaml;
-
-// To learn more about WinUI, the WinUI project structure,
-// and more about our project templates, see: http://aka.ms/winui-project-info.
+using System.Diagnostics;
 
 namespace Visio.WinUI;
 
@@ -16,6 +14,16 @@ public partial class App : MauiWinUIApplication
 	/// </summary>
 	public App()
 	{
+		try
+		{
+			LibVLCSharp.Shared.Core.Initialize();
+			Debug.WriteLine("[Windows] LibVLC Core inicializado com sucesso");
+		}
+		catch (Exception ex)
+		{
+			Debug.WriteLine($"[Windows] Erro ao inicializar LibVLC: {ex.Message}");
+		}
+
 		this.InitializeComponent();
 	}
 
