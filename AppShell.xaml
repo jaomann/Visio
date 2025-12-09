@@ -7,9 +7,18 @@
     Shell.FlyoutBehavior="Disabled"
     Title="Visio">
 
-    <ShellContent
-        Title="Home"
-        ContentTemplate="{DataTemplate views:MainPage}"
-        Route="MainPage" />
+    <TabBar>
+        <ShellContent
+            Title="Monitor"
+            Icon="dotnet_bot.png"
+            ContentTemplate="{DataTemplate views:MainPage}"
+            Route="MainPage" />
+        
+        <ShellContent
+            Title="Galeria"
+            Icon="dotnet_bot.png"
+            ContentTemplate="{DataTemplate views:GalleryPage}"
+            Route="GalleryPage" />
+    </TabBar>
 
 </Shell>

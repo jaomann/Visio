@@ -22,10 +22,13 @@ public static class MauiProgram
 			});
 
 		builder.Services.AddSingleton<IFrameCaptureService, OpenCvFrameCaptureService>();
+		builder.Services.AddSingleton<IImageProcessingService, ImageProcessingService>();
 		
 		builder.Services.AddTransient<MainViewModel>();
+		builder.Services.AddTransient<GalleryViewModel>();
 		
 		builder.Services.AddTransient<MainPage>();
+		builder.Services.AddTransient<GalleryPage>();
 
 #if DEBUG
 		builder.Logging.AddDebug();

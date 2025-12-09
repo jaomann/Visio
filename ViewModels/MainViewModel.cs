@@ -14,6 +14,7 @@ namespace Visio.ViewModels;
 public partial class MainViewModel : ObservableObject
 {
     private readonly IFrameCaptureService _captureService;
+    private readonly Visio.Services.Interfaces.IImageProcessingService _imageProcessingService;
     private Timer? _frameUpdateTimer;
     private readonly SemaphoreSlim _conversionSemaphore = new SemaphoreSlim(1, 1);
 
@@ -32,9 +33,19 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private ImageSource? _currentFrame;
 
-    public MainViewModel(IFrameCaptureService captureService)
+    [ObservableProperty]
+    private bool _isGrayscaleEnabled;
+
+    [ObservableProperty]
+    private bool _isBlurEnabled;
+
+    [ObservableProperty]
+    private bool _isEdgeDetectionEnabled;
+
+    public MainViewModel(IFrameCaptureService captureService, Visio.Services.Interfaces.IImageProcessingService imageProcessingService)
     {
         _captureService = captureService;
+        _imageProcessingService = imageProcessingService;
         _captureService.ConnectionError += OnConnectionError;
     }
 
@@ -86,6 +97,61 @@ public partial class MainViewModel : ObservableObject
         StatusColor = Colors.Gray;
     }
 
+    [RelayCommand]
+    private async Task CaptureSnapshot()
+    {
+        if (!IsConnected)
+        {
+            StatusMessage = "Conecte ao RTSP primeiro";
+            StatusColor = Colors.Orange;
+            return;
+        }
+
+        var frame = _captureService.GetCurrentFrame();
+        if (frame == null || frame.Empty())
+        {
+            StatusMessage = "Nenhum frame disponível";
+            StatusColor = Colors.Orange;
+            return;
+        }
+
+        try
+        {
+            using var processedFrame = ApplyFilters(frame);
+            
+            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var filename = $"snapshot_{timestamp}.png";
+            var picturesPath = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
+            var visioPath = Path.Combine(picturesPath, "Visio");
+            
+            Directory.CreateDirectory(visioPath);
+            
+            var fullPath = Path.Combine(visioPath, filename);
+            
+            Cv2.ImWrite(fullPath, processedFrame);
+            
+            StatusMessage = $"Foto salva: {filename}";
+            StatusColor = Colors.Green;
+            
+            await Task.Delay(3000);
+            
+            if (IsConnected)
+            {
+                StatusMessage = "Conectado";
+                StatusColor = Colors.Green;
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Erro ao salvar: {ex.Message}";
+            StatusColor = Colors.Red;
+        }
+        finally
+        {
+            frame.Dispose();
+        }
+    }
+
     private void StartFrameUpdate()
     {
         Debug.WriteLine("[ViewModel] Iniciando timer de atualização de frames (20 FPS)");
@@ -131,10 +197,26 @@ public partial class MainViewModel : ObservableObject
         _frameUpdateTimer = null;
     }
 
+    public void OnPageAppearing()
+    {
+        Debug.WriteLine("[ViewModel] Página aparecendo");
+        if (IsConnected && _frameUpdateTimer == null)
+        {
+            StartFrameUpdate();
+        }
+    }
+
+    public void OnPageDisappearing()
+    {
+        Debug.WriteLine("[ViewModel] Página desaparecendo");
+        StopFrameUpdate();
+    }
+
     private ImageSource MatToImageSource(Mat mat)
     {
+        using var processed = ApplyFilters(mat);
         using var resized = new Mat();
-        Cv2.Resize(mat, resized, new OpenCvSharp.Size(640, 360));
+        Cv2.Resize(processed, resized, new OpenCvSharp.Size(640, 360));
         
         var bitmap = BitmapConverter.ToBitmap(resized);
         
@@ -151,6 +233,34 @@ public partial class MainViewModel : ObservableObject
         
         ms.Position = 0;
         return ImageSource.FromStream(() => new MemoryStream(ms.ToArray()));
+    }
+
+    private Mat ApplyFilters(Mat input)
+    {
+        var current = input.Clone();
+
+        if (IsGrayscaleEnabled)
+        {
+            var temp = _imageProcessingService.ApplyGrayscale(current);
+            current.Dispose();
+            current = temp;
+        }
+
+        if (IsBlurEnabled)
+        {
+            var temp = _imageProcessingService.ApplyBlur(current);
+            current.Dispose();
+            current = temp;
+        }
+
+        if (IsEdgeDetectionEnabled)
+        {
+            var temp = _imageProcessingService.ApplyEdgeDetection(current);
+            current.Dispose();
+            current = temp;
+        }
+
+        return current;
     }
 
     private void OnConnectionError(object? sender, string error)
