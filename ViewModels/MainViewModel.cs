@@ -1,7 +1,10 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using LibVLCSharp.Shared;
 using Visio.Services.Interfaces;
+using OpenCvSharp;
+using OpenCvSharp.Extensions;
+using System.IO;
+using System.Diagnostics;
 
 namespace Visio.ViewModels;
 
@@ -10,7 +13,9 @@ namespace Visio.ViewModels;
 /// </summary>
 public partial class MainViewModel : ObservableObject
 {
-    private readonly IRtspStreamService _rtspService;
+    private readonly IFrameCaptureService _captureService;
+    private Timer? _frameUpdateTimer;
+    private readonly SemaphoreSlim _conversionSemaphore = new SemaphoreSlim(1, 1);
 
     [ObservableProperty]
     private string _rtspUrl = "rtsp://";
@@ -25,12 +30,12 @@ public partial class MainViewModel : ObservableObject
     private bool _isConnected = false;
 
     [ObservableProperty]
-    private MediaPlayer? _mediaPlayer;
+    private ImageSource? _currentFrame;
 
-    public MainViewModel(IRtspStreamService rtspService)
+    public MainViewModel(IFrameCaptureService captureService)
     {
-        _rtspService = rtspService;
-        _rtspService.ConnectionError += OnConnectionError;
+        _captureService = captureService;
+        _captureService.ConnectionError += OnConnectionError;
     }
 
     /// <summary>
@@ -44,14 +49,14 @@ public partial class MainViewModel : ObservableObject
             StatusMessage = "Conectando...";
             StatusColor = Colors.Orange;
 
-            var success = await _rtspService.ConnectAsync(RtspUrl);
+            var success = await _captureService.ConnectAsync(RtspUrl);
 
             if (success)
             {
-                MediaPlayer = _rtspService.GetMediaPlayer();
                 IsConnected = true;
                 StatusMessage = "Conectado";
                 StatusColor = Colors.Green;
+                StartFrameUpdate();
             }
             else
             {
@@ -72,17 +77,90 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task DisconnectAsync()
     {
-        await _rtspService.DisconnectAsync();
-        MediaPlayer = null;
+        StopFrameUpdate();
+        await _captureService.DisconnectAsync();
+        
+        CurrentFrame = null;
         IsConnected = false;
         StatusMessage = "Desconectado";
         StatusColor = Colors.Gray;
     }
 
+    private void StartFrameUpdate()
+    {
+        Debug.WriteLine("[ViewModel] Iniciando timer de atualização de frames (20 FPS)");
+        
+        _frameUpdateTimer = new Timer(async _ =>
+        {
+            if (!_conversionSemaphore.Wait(0))
+            {
+                return;
+            }
+
+            try
+            {
+                var mat = _captureService.GetCurrentFrame();
+            if (mat != null && !mat.Empty())
+            {
+                try
+                {
+                    var imageSource = await Task.Run(() => MatToImageSource(mat));
+                    
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                    {
+                        CurrentFrame = imageSource;
+                    });
+                }
+                finally
+                {
+                        mat.Dispose();
+                    }
+                }
+            }
+            finally
+            {
+                _conversionSemaphore.Release();
+            }
+        }, null, 0, 33);
+    }
+
+    private void StopFrameUpdate()
+    {
+        Debug.WriteLine("[ViewModel] Parando timer de frames");
+        _frameUpdateTimer?.Dispose();
+        _frameUpdateTimer = null;
+    }
+
+    private ImageSource MatToImageSource(Mat mat)
+    {
+        using var resized = new Mat();
+        Cv2.Resize(mat, resized, new OpenCvSharp.Size(640, 360));
+        
+        var bitmap = BitmapConverter.ToBitmap(resized);
+        
+        using var ms = new MemoryStream();
+        
+        var jpegEncoder = System.Drawing.Imaging.ImageCodecInfo.GetImageEncoders()
+            .First(c => c.FormatID == System.Drawing.Imaging.ImageFormat.Jpeg.Guid);
+        var encoderParams = new System.Drawing.Imaging.EncoderParameters(1);
+        encoderParams.Param[0] = new System.Drawing.Imaging.EncoderParameter(
+            System.Drawing.Imaging.Encoder.Quality, 70L);
+        
+        bitmap.Save(ms, jpegEncoder, encoderParams);
+        bitmap.Dispose();
+        
+        ms.Position = 0;
+        return ImageSource.FromStream(() => new MemoryStream(ms.ToArray()));
+    }
+
     private void OnConnectionError(object? sender, string error)
     {
-        StatusMessage = $"Erro: {error}";
-        StatusColor = Colors.Red;
-        IsConnected = false;
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            StatusMessage = $"Erro: {error}";
+            StatusColor = Colors.Red;
+            IsConnected = false;
+            StopFrameUpdate();
+        });
     }
 }

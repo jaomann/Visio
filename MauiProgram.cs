@@ -4,8 +4,6 @@ using Visio.Services.Interfaces;
 using Visio.Services.Implementations;
 using Visio.ViewModels;
 using Visio.Views;
-using LibVLCSharp.MAUI;
-using LibVLCSharp.Shared;
 
 namespace Visio;
 
@@ -13,8 +11,6 @@ public static class MauiProgram
 {
 	public static MauiApp CreateMauiApp()
 	{
-		Core.Initialize();
-
 		var builder = MauiApp.CreateBuilder();
 		builder
 			.UseMauiApp<App>()
@@ -23,15 +19,9 @@ public static class MauiProgram
 			{
 				fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
 				fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
-			})
-			.ConfigureMauiHandlers(handlers =>
-			{
-#if WINDOWS
-				handlers.AddHandler(typeof(VideoView), typeof(VideoViewHandler));
-#endif
 			});
 
-		builder.Services.AddSingleton<IRtspStreamService, VlcRtspStreamService>();
+		builder.Services.AddSingleton<IFrameCaptureService, OpenCvFrameCaptureService>();
 		
 		builder.Services.AddTransient<MainViewModel>();
 		
