@@ -165,6 +165,12 @@ public partial class MainViewModel : ObservableObject
 
             try
             {
+                if (_captureService == null || !IsConnected)
+                {
+                    _conversionSemaphore.Release();
+                    return;
+                }
+
                 var mat = _captureService.GetCurrentFrame();
             if (mat != null && !mat.Empty())
             {
@@ -174,7 +180,10 @@ public partial class MainViewModel : ObservableObject
                     
                     await MainThread.InvokeOnMainThreadAsync(() =>
                     {
-                        CurrentFrame = imageSource;
+                        if (IsConnected)
+                        {
+                            CurrentFrame = imageSource;
+                        }
                     });
                 }
                 finally
@@ -200,16 +209,32 @@ public partial class MainViewModel : ObservableObject
     public void OnPageAppearing()
     {
         Debug.WriteLine("[ViewModel] Página aparecendo");
-        if (IsConnected && _frameUpdateTimer == null)
+        
+        try
         {
-            StartFrameUpdate();
+            if (IsConnected && _frameUpdateTimer == null && _captureService != null)
+            {
+                StartFrameUpdate();
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[ViewModel] Erro ao retomar timer: {ex.Message}");
         }
     }
 
     public void OnPageDisappearing()
     {
         Debug.WriteLine("[ViewModel] Página desaparecendo");
-        StopFrameUpdate();
+        
+        try
+        {
+            StopFrameUpdate();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[ViewModel] Erro ao parar timer: {ex.Message}");
+        }
     }
 
     private ImageSource MatToImageSource(Mat mat)
