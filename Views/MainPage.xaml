@@ -85,6 +85,13 @@
                            VerticalOptions="Center"/>
                 </HorizontalStackLayout>
                 
+                <HorizontalStackLayout Spacing="10">
+                    <CheckBox IsChecked="{Binding IsFaceDetectionEnabled}" Color="#2196F3"/>
+                    <Label Text="Detecção Facial" 
+                           TextColor="White" 
+                           VerticalOptions="Center"/>
+                </HorizontalStackLayout>
+                
                 <BoxView HeightRequest="1" Color="#3E3E3E"/>
                 
                 <Label Text="Captura" 

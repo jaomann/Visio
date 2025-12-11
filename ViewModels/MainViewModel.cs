@@ -42,6 +42,9 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _isEdgeDetectionEnabled;
 
+    [ObservableProperty]
+    private bool _isFaceDetectionEnabled;
+
     public MainViewModel(IFrameCaptureService captureService, Visio.Services.Interfaces.IImageProcessingService imageProcessingService)
     {
         _captureService = captureService;
@@ -281,6 +284,13 @@ public partial class MainViewModel : ObservableObject
         if (IsEdgeDetectionEnabled)
         {
             var temp = _imageProcessingService.ApplyEdgeDetection(current);
+            current.Dispose();
+            current = temp;
+        }
+
+        if (IsFaceDetectionEnabled)
+        {
+            var temp = _imageProcessingService.ApplyFaceDetection(current);
             current.Dispose();
             current = temp;
         }
