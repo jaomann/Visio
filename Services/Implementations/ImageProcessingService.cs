@@ -12,7 +12,7 @@ public class ImageProcessingService : Visio.Services.Interfaces.IImageProcessing
     private List<OpenCvSharp.Rect> _previousFaces = new List<OpenCvSharp.Rect>();
     private int _framesSinceLastDetection = 0;
     private const int MAX_FRAMES_WITHOUT_DETECTION = 5;
-    
+    private int _failedFrames = 0;
     private readonly Queue<OpenCvSharp.Rect> _faceBuffer = new Queue<OpenCvSharp.Rect>();
     private const int BUFFER_SIZE = 5;
 
@@ -61,76 +61,80 @@ public class ImageProcessingService : Visio.Services.Interfaces.IImageProcessing
         if (_faceCascadeAlt2 == null || _faceCascadeAlt2.Empty())
             return input.Clone();
 
-        var output = input.Clone();
         var gray = new Mat();
-
         Cv2.CvtColor(input, gray, ColorConversionCodes.BGR2GRAY);
 
-        // Apply CLAHE only if scene is dark
+
         double brightness = Cv2.Mean(gray).Val0;
-        if (brightness < 80)
+        if (brightness < 60) 
         {
             using var clahe = Cv2.CreateCLAHE(clipLimit: 3.0, tileGridSize: new OpenCvSharp.Size(8, 8));
             clahe.Apply(gray, gray);
         }
 
-        // Dynamic minSize based on resolution
-        var dynamicMinSize = new OpenCvSharp.Size(input.Width / 15, input.Height / 15);
-        
+
+        double scale = 0.7;
+        var resized = new Mat();
+        Cv2.Resize(gray, resized, new OpenCvSharp.Size(), scale, scale);
+
+        var minSize = new OpenCvSharp.Size(input.Width / 20, input.Height / 20);
+
+
         var faces = _faceCascadeAlt2.DetectMultiScale(
-            gray,
+            resized,
             scaleFactor: 1.05,
             minNeighbors: 6,
             flags: HaarDetectionTypes.ScaleImage,
-            minSize: dynamicMinSize,
-            maxSize: new OpenCvSharp.Size(input.Width / 2, input.Height / 2)
+            minSize: minSize
         );
 
-        // Fallback to default cascade if alt2 found nothing
-        if (faces.Length == 0 && _faceCascadeDefault != null && !_faceCascadeDefault.Empty())
+
+        if (faces.Length == 0)
         {
-            faces = _faceCascadeDefault.DetectMultiScale(
-                gray,
-                scaleFactor: 1.05,
-                minNeighbors: 6,
-                flags: HaarDetectionTypes.ScaleImage,
-                minSize: dynamicMinSize,
-                maxSize: new OpenCvSharp.Size(input.Width / 2, input.Height / 2)
-            );
+            _failedFrames++;
+
+            if (_failedFrames >= 3)
+            {
+                if (_faceCascadeDefault != null && !_faceCascadeDefault.Empty())
+                {
+                    faces = _faceCascadeDefault.DetectMultiScale(resized, 1.05, 6,
+                        HaarDetectionTypes.ScaleImage, minSize);
+                }
+
+                if (faces.Length == 0 && _faceCascadeProfile != null && !_faceCascadeProfile.Empty())
+                {
+                    faces = _faceCascadeProfile.DetectMultiScale(resized, 1.05, 6,
+                        HaarDetectionTypes.ScaleImage, minSize);
+                }
+
+                _failedFrames = 0;
+            }
+        }
+        else
+        {
+            _failedFrames = 0;
         }
 
-        // Fallback to profile cascade for side faces
-        if (faces.Length == 0 && _faceCascadeProfile != null && !_faceCascadeProfile.Empty())
+        for (int i = 0; i < faces.Length; i++)
         {
-            faces = _faceCascadeProfile.DetectMultiScale(
-                gray,
-                scaleFactor: 1.05,
-                minNeighbors: 6,
-                flags: HaarDetectionTypes.ScaleImage,
-                minSize: dynamicMinSize,
-                maxSize: new OpenCvSharp.Size(input.Width / 2, input.Height / 2)
-            );
+            faces[i].X = (int)(faces[i].X / scale);
+            faces[i].Y = (int)(faces[i].Y / scale);
+            faces[i].Width = (int)(faces[i].Width / scale);
+            faces[i].Height = (int)(faces[i].Height / scale);
         }
 
         var validFaces = new List<OpenCvSharp.Rect>();
-        
+
         foreach (var face in faces)
         {
-            float aspectRatio = (float)face.Width / face.Height;
-            
-            if (aspectRatio < 0.6f || aspectRatio > 1.4f)
-                continue;
+            float aspect = (float)face.Width / face.Height;
+            if (aspect < 0.6f || aspect > 1.4f) continue;
 
-            if (face.Width < dynamicMinSize.Width || face.Height < dynamicMinSize.Height)
-                continue;
-
-            if (!HasSufficientVariance(gray, face))
-                continue;
+            if (!HasSufficientVariance(gray, face)) continue;
 
             validFaces.Add(face);
         }
 
-        // Temporal buffering - add to buffer
         if (validFaces.Count > 0)
         {
             _faceBuffer.Enqueue(validFaces[0]);
@@ -138,40 +142,42 @@ public class ImageProcessingService : Visio.Services.Interfaces.IImageProcessing
                 _faceBuffer.Dequeue();
         }
 
-        // Calculate average from buffer
         OpenCvSharp.Rect? finalFace = null;
+
         if (_faceBuffer.Count > 0)
         {
-            var avgX = (int)_faceBuffer.Average(f => f.X);
-            var avgY = (int)_faceBuffer.Average(f => f.Y);
-            var avgW = (int)_faceBuffer.Average(f => f.Width);
-            var avgH = (int)_faceBuffer.Average(f => f.Height);
-            finalFace = new OpenCvSharp.Rect(avgX, avgY, avgW, avgH);
-        }
-
-        var trackedFaces = finalFace.HasValue ? new List<OpenCvSharp.Rect> { finalFace.Value } : new List<OpenCvSharp.Rect>();
-        trackedFaces = MergeFacesWithTracking(trackedFaces);
-
-        foreach (var face in trackedFaces)
-        {
-            Cv2.Rectangle(output, face, Scalar.LimeGreen, 2);
-            
-            var centerX = face.X + face.Width / 2;
-            var centerY = face.Y + face.Height / 2;
-            Cv2.Circle(output, new OpenCvSharp.Point(centerX, centerY), 3, Scalar.Red, -1);
-            
-            Cv2.PutText(
-                output,
-                $"Face - {face.Width}:{face.Height}",
-                new OpenCvSharp.Point(face.X, face.Y - 10),
-                HersheyFonts.HersheySimplex,
-                0.5,
-                Scalar.LimeGreen,
-                2
+            finalFace = new OpenCvSharp.Rect(
+                (int)_faceBuffer.Average(f => f.X),
+                (int)_faceBuffer.Average(f => f.Y),
+                (int)_faceBuffer.Average(f => f.Width),
+                (int)_faceBuffer.Average(f => f.Height)
             );
         }
 
+        var tracked = finalFace.HasValue
+            ? new List<OpenCvSharp.Rect> { finalFace.Value }
+            : new List<OpenCvSharp.Rect>();
+
+        tracked = MergeFacesWithTracking(tracked);
+
+        var output = input.Clone();
+
+        foreach (var face in tracked)
+        {
+            Cv2.Rectangle(output, face, Scalar.LimeGreen, 2);
+            Cv2.Circle(output,
+                new OpenCvSharp.Point(face.X + face.Width / 2, face.Y + face.Height / 2),
+                3, Scalar.Red, -1);
+
+            Cv2.PutText(output, $"Face {face.Width}x{face.Height}",
+                new OpenCvSharp.Point(face.X, face.Y - 10),
+                HersheyFonts.HersheySimplex, 0.5,
+                Scalar.LimeGreen, 2);
+        }
+
         gray.Dispose();
+        resized.Dispose();
+
         return output;
     }
 

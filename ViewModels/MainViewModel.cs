@@ -157,7 +157,7 @@ public partial class MainViewModel : ObservableObject
 
     private void StartFrameUpdate()
     {
-        Debug.WriteLine("[ViewModel] Iniciando timer de atualização de frames (20 FPS)");
+        Debug.WriteLine("[ViewModel] Iniciando timer de atualização de frames (30 FPS)");
         
         _frameUpdateTimer = new Timer(async _ =>
         {
@@ -175,22 +175,26 @@ public partial class MainViewModel : ObservableObject
                 }
 
                 var mat = _captureService.GetCurrentFrame();
-            if (mat != null && !mat.Empty())
-            {
-                try
+                if (mat != null && !mat.Empty())
                 {
-                    var imageSource = await Task.Run(() => MatToImageSource(mat));
-                    
-                    await MainThread.InvokeOnMainThreadAsync(() =>
+                    try
                     {
-                        if (IsConnected)
+                        var imageSource = await Task.Run(() =>
                         {
-                            CurrentFrame = imageSource;
-                        }
-                    });
-                }
-                finally
-                {
+                            using var clone = mat.Clone();
+                            return MatToImageSource(clone);
+                        });
+
+                        await MainThread.InvokeOnMainThreadAsync(() =>
+                        {
+                            if (IsConnected)
+                            {
+                                CurrentFrame = imageSource;
+                            }
+                        });
+                    }
+                    finally
+                    {
                         mat.Dispose();
                     }
                 }
