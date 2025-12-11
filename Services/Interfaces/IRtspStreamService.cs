@@ -1,7 +1,7 @@
 namespace Visio.Services.Interfaces;
 
 /// <summary>
-/// Interface para serviço de streaming RTSP usando LibVLC
+/// Interface para serviço de streaming RTSP
 /// </summary>
 public interface IRtspStreamService
 {
@@ -21,11 +21,6 @@ public interface IRtspStreamService
     /// Indica se está conectado a um stream
     /// </summary>
     bool IsConnected { get; }
-    
-    /// <summary>
-    /// Obtém o MediaPlayer do LibVLC para binding na UI
-    /// </summary>
-    LibVLCSharp.Shared.MediaPlayer? GetMediaPlayer();
     
     /// <summary>
     /// Evento disparado quando ocorre erro de conexão
