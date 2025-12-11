@@ -4,12 +4,45 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:views="clr-namespace:Visio.Views"
+    Title="Visio - RTSP Monitor"
     Shell.FlyoutBehavior="Disabled"
-    Title="Visio">
+    Shell.TabBarBackgroundColor="#252525"
+    Shell.TabBarForegroundColor="White"
+    Shell.TabBarTitleColor="White"
+    Shell.TabBarUnselectedColor="#808080">
 
-    <ShellContent
-        Title="Home"
-        ContentTemplate="{DataTemplate views:MainPage}"
-        Route="MainPage" />
+    <Shell.Resources>
+        <Style TargetType="TabBar">
+            <Setter Property="Shell.TabBarBackgroundColor" Value="#252525"/>
+        </Style>
+    </Shell.Resources>
+
+    <TabBar>
+        <ShellContent
+            Title="Monitor"
+            ContentTemplate="{DataTemplate views:MainPage}"
+            Route="MainPage">
+            <ShellContent.Icon>
+                <FontImageSource 
+                    Glyph="&#xE714;" 
+                    FontFamily="Segoe MDL2 Assets"
+                    Color="White"
+                    Size="24"/>
+            </ShellContent.Icon>
+        </ShellContent>
+        
+        <ShellContent
+            Title="Galeria"
+            ContentTemplate="{DataTemplate views:GalleryPage}"
+            Route="GalleryPage">
+            <ShellContent.Icon>
+                <FontImageSource 
+                    Glyph="&#xE8B9;" 
+                    FontFamily="Segoe MDL2 Assets"
+                    Color="White"
+                    Size="24"/>
+            </ShellContent.Icon>
+        </ShellContent>
+    </TabBar>
 
 </Shell>
