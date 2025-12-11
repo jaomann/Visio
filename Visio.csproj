@@ -67,9 +67,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<None Update="Resources\haarcascade_frontalface_default.xml">
-			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-		</None>
+		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
 	</ItemGroup>
 
 </Project>
